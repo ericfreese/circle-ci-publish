@@ -1,0 +1,42 @@
+#!/bin/bash
+
+set -euxo pipefail
+
+[[ "$1" =~ (patch|minor|major) ]]
+
+# Set up a git email/name so we can run other git commands
+git config user.email "publish@circleci.com"
+git config user.name "Circle CI"
+
+# Validate github's fingerprint before using ssh to push to the repo
+# https://serverfault.com/a/701637/132285
+ssh-keyscan github.com >> /tmp/githubkey
+[[ "$(ssh-keygen -lf /tmp/githubkey)" == "2048 16:27:ac:a5:76:28:2d:36:63:1b:56:4d:eb:df:a6:48 github.com (RSA)" ]]
+[[ -d ~/.ssh ]] || mkdir ~/.ssh
+cat /tmp/githubkey >> ~/.ssh/known_hosts
+
+# Locally and remotely delete the tag that was created to trigger this job
+git tag --delete publish-$1
+git push origin --delete publish-$1
+
+# Keep track of the commit sha before we increment the version
+publish_commit=$(git rev-parse HEAD)
+
+# This increments the package.json version and adds a new git commit with tag
+# referencing it
+yarn publish --new-version $1
+
+# Push newly created tag up to github
+git push origin --tags
+
+# Keep track of the commit that yarn just added
+new_commit=$(git rev-parse HEAD)
+
+# We don't know which exact branch to update based on the tag that was created,
+# so just update all branches that point to the commit that was tagged
+branches_to_update=$(git for-each-ref refs/heads/\* --format="%(objectname) %(refname:short)" | grep -Po "$publish_commit \K.+$")
+for branch in $branches_to_update; do
+  git checkout $branch
+  git merge $new_commit
+  git push origin $branch
+done

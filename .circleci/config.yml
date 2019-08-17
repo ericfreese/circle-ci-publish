@@ -1,0 +1,48 @@
+version: 2.1
+executors:
+  ci-executor:
+    docker:
+      - image: circleci/node:9.9.0
+jobs:
+  build:
+    executor: ci-executor
+    steps:
+      - checkout
+      - run: echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > .npmrc
+      - restore_cache:
+          key: v1-deps-{{ checksum "package.json" }}
+      - run: yarn install
+      - save_cache:
+          key: v1-deps-{{ checksum "package.json" }}
+          paths:
+            - ./node_modules
+      - run: yarn build
+      - persist_to_workspace:
+          root: ~/project
+          paths:
+            - "*"
+  publish-patch:
+    executor: ci-executor
+    steps:
+      - attach_workspace:
+          at: ~/project
+      - add_ssh_keys:
+          fingerprints:
+            - "76:57:0d:eb:5f:e0:e4:a4:3d:39:e0:6a:7b:4f:8c:76"
+      - run: .circleci/publish patch
+workflows:
+  version: 2
+  publish-patch:
+    jobs:
+      - build:
+          filters:
+            tags:
+              only: /.*/
+      - publish-patch:
+          requires:
+            - build
+          filters:
+            tags:
+              only: /^publish-patch$/
+            branches:
+              ignore: /.*/
