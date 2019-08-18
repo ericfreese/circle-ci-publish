@@ -1,13 +1,17 @@
 {
   "name": "example-circle-ci-publish",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "An example setup to enable publishing new npm versions with GitHub releases and CircleCI",
   "main": "lib/index.js",
   "repository": "https://github.com/ericfreese/circle-ci-publish",
   "author": "Eric Freese <ericdfreese@gmail.com>",
   "license": "MIT",
-  "types": ["lib/index.d.ts"],
-  "files": ["lib"],
+  "types": [
+    "lib/index.d.ts"
+  ],
+  "files": [
+    "lib"
+  ],
   "scripts": {
     "build": "tsc"
   },
