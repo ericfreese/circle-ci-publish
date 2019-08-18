@@ -24,7 +24,7 @@ publish_commit=$(git rev-parse HEAD)
 
 # This increments the package.json version and adds a new git commit with tag
 # referencing it
-yarn publish --new-version $1
+yarn version --new-version $1
 
 # Push newly created tag up to github
 git push origin --tags
@@ -40,3 +40,7 @@ for branch in $branches_to_update; do
   git merge $new_commit
   git push origin $branch
 done
+
+# Publish the new version
+# yarn publish --non-interactive
+npm publish
