@@ -1,6 +1,6 @@
 {
   "name": "example-circle-ci-publish",
-  "version": "0.0.8-0",
+  "version": "0.0.8-1",
   "description": "An example setup to enable publishing new npm versions with GitHub releases and CircleCI",
   "main": "lib/index.js",
   "repository": "https://github.com/ericfreese/circle-ci-publish",
