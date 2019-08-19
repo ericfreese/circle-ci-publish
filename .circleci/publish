@@ -21,20 +21,20 @@ cat /tmp/githubkey >> ~/.ssh/known_hosts
 git tag --delete publish-$1
 git push origin --delete refs/tags/publish-$1
 
-# Keep track of the commit sha before we increment the version
-publish_commit=$(git rev-parse HEAD)
+# Keep track of the commit that the trigger tag was added to
+triggered_commit=$(git rev-parse HEAD)
 
 # This increments the package.json version and adds a new git commit with tag
 # referencing it
 yarn version --new-version $1
 
 # Keep track of the commit that yarn just added
-new_commit=$(git rev-parse HEAD)
+release_commit=$(git rev-parse HEAD)
 
 # We don't know which exact branch to update based on the tag that was created,
 # so just update all branches that point to the commit that was tagged.
 readarray -t branches_to_update < <(
-  git for-each-ref refs/heads/\* --points-at=$publish_commit --format="%(refname:short)"
+  git for-each-ref refs/heads/\* --points-at=$triggered_commit --format="%(refname:short)"
 )
 
 # Pull each branch before merging the release commit into it in case a commit
@@ -44,11 +44,11 @@ readarray -t branches_to_update < <(
 for branch in ${branches_to_update[@]}; do
   git pull origin $branch
   git checkout $branch
-  git merge $new_commit
+  git merge $release_commit
 done
 
 # Make sure we're back at the release commit after updating the branches
-git checkout $new_commit
+git checkout $release_commit
 
 # Push newly created release tag and updated branches upstream. `--atomic`
 # means that all refs must update successfully, or none will be updated and the
