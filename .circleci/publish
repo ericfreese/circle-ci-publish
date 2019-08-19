@@ -64,12 +64,9 @@ done
 # We've successfully pushed all the updated branches, push the release tag
 git push origin --tags
 
-# Publish the new version. The version of `yarn` that comes with this docker
-# image (v1.5.1) is not able to publish without incrementing the package
-# version, so we use `npm` for this step [1]. If this fails, it will leave the
-# release tag (and commit) in git, but there will be no associated release in
-# the npm registry. In that case, a developer can manually check out the
-# release tag and run `npm publish` to publish the release to the registry.
-# 1: https://github.com/yarnpkg/yarn/issues/5623
-npm publish
+# Publish the new version. If this fails, it will leave the release tag (and
+# commit) in git, but there will be no associated release in the npm registry.
+# In that case, a developer can manually check out the release tag and run `npm
+# publish` to publish the release to the registry.
+yarn publish --non-interactive
 
