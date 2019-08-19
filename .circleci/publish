@@ -34,9 +34,7 @@ new_commit=$(git rev-parse HEAD)
 # We don't know which exact branch to update based on the tag that was created,
 # so just update all branches that point to the commit that was tagged.
 readarray -t branches_to_update < <(
-  # If we had git v2.7.2, we could use `--points-at` instead of grep
-  git for-each-ref refs/heads/\* --format="%(objectname) %(refname:short)" \
-    | grep -Po "$publish_commit \K.+$"
+  git for-each-ref refs/heads/\* --points-at=$publish_commit --format="%(refname:short)"
 )
 
 # Pull each branch before merging the release commit into it in case a commit
@@ -52,17 +50,10 @@ done
 # Make sure we're back at the release commit after updating the branches
 git checkout $new_commit
 
-# If we had git v2.4.0, we could use `git push --atomic` to push the tag and
-# all updated branches together atomically. Until then, if we get a partial
-# push, the job will fail and someone will just have to clean up the git
-# branches manually. We push the branches before the tag since they're more
-# likely to fail than the tag.
-for branch in ${branches_to_update[@]}; do
-  git push origin $branch
-done
-
-# We've successfully pushed all the updated branches, push the release tag
-git push origin --tags
+# Push newly created release tag and updated branches upstream. `--atomic`
+# means that all refs must update successfully, or none will be updated and the
+# script will exit.
+git push origin --atomic --tags ${branches_to_update[@]}
 
 # Publish the new version. If this fails, it will leave the release tag (and
 # commit) in git, but there will be no associated release in the npm registry.
