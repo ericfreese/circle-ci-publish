@@ -2,7 +2,7 @@
 
 set -euxo pipefail
 
-[[ "$1" =~ (patch|minor|major) ]]
+[[ "$1" =~ (prerelease|patch|minor|major) ]]
 
 # Set up a git email/name so we can run other git commands
 git config user.email "publish@circleci.com"
