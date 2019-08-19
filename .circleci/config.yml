@@ -22,8 +22,13 @@ jobs:
           root: ~/project
           paths:
             - "*"
-  publish-patch:
+  publish:
     executor: ci-executor
+    parameters:
+      version:
+        description: Which version number to increment before publishing
+        type: enum
+        enum: ["prerelease", "minor", "major", "patch"]
     steps:
       - attach_workspace:
           at: ~/project
@@ -31,7 +36,7 @@ jobs:
       - add_ssh_keys:
           fingerprints:
             - "76:57:0d:eb:5f:e0:e4:a4:3d:39:e0:6a:7b:4f:8c:76"
-      - run: .circleci/publish patch
+      - run: .circleci/publish << parameters.version >>
 workflows:
   version: 2
   build-and-publish:
@@ -40,12 +45,40 @@ workflows:
           filters:
             tags:
               only: /.*/
-      - publish-patch:
+      # https://circleci.com/docs/2.0/workflows/#executing-workflows-for-a-git-tag
+      - publish:
+          version: prerelease
           requires:
             - build
           filters:
-            # https://circleci.com/docs/2.0/workflows/#executing-workflows-for-a-git-tag
+            tags:
+              only: /^publish-prerelease$/
+            branches:
+              ignore: /.*/
+      - publish:
+          version: patch
+          requires:
+            - build
+          filters:
             tags:
               only: /^publish-patch$/
+            branches:
+              ignore: /.*/
+      - publish:
+          version: minor
+          requires:
+            - build
+          filters:
+            tags:
+              only: /^publish-minor$/
+            branches:
+              ignore: /.*/
+      - publish:
+          version: major
+          requires:
+            - build
+          filters:
+            tags:
+              only: /^publish-major$/
             branches:
               ignore: /.*/
