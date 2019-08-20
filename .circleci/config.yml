@@ -1,11 +1,8 @@
-version: 2.1
-executors:
-  ci-executor:
-    docker:
-      - image: circleci/node:10.16
+version: 2
 jobs:
   build:
-    executor: ci-executor
+    docker:
+      - image: circleci/node:10.16
     steps:
       - checkout
       # https://circleci.com/blog/publishing-npm-packages-using-circleci-2-0/
@@ -18,67 +15,16 @@ jobs:
           paths:
             - ./node_modules
       - run: yarn build
-      - persist_to_workspace:
-          root: ~/project
-          paths:
-            - "*"
-  publish:
-    executor: ci-executor
-    parameters:
-      version:
-        description: Which version number to increment before publishing
-        type: enum
-        enum: ["prerelease", "minor", "major", "patch"]
-    steps:
-      - attach_workspace:
-          at: ~/project
-      # https://support.circleci.com/hc/en-us/articles/360018860473-How-to-push-a-commit-back-to-the-same-repository-as-part-of-the-CircleCI-job
+      - run:
+          name: Halt if we don't need to publish
+          command: |
+              [ -n "$CI_INCREMENT_VERSION" ] || circleci-agent step halt
       - add_ssh_keys:
           fingerprints:
             - "76:57:0d:eb:5f:e0:e4:a4:3d:39:e0:6a:7b:4f:8c:76"
-      - run: .circleci/publish << parameters.version >>
+      - run: .circleci/publish
 workflows:
   version: 2
   build-and-publish:
     jobs:
-      - build:
-          filters:
-            tags:
-              only: /.*/
-      # https://circleci.com/docs/2.0/workflows/#executing-workflows-for-a-git-tag
-      - publish:
-          version: prerelease
-          requires:
-            - build
-          filters:
-            tags:
-              only: /^publish-prerelease$/
-            branches:
-              ignore: /.*/
-      - publish:
-          version: patch
-          requires:
-            - build
-          filters:
-            tags:
-              only: /^publish-patch$/
-            branches:
-              ignore: /.*/
-      - publish:
-          version: minor
-          requires:
-            - build
-          filters:
-            tags:
-              only: /^publish-minor$/
-            branches:
-              ignore: /.*/
-      - publish:
-          version: major
-          requires:
-            - build
-          filters:
-            tags:
-              only: /^publish-major$/
-            branches:
-              ignore: /.*/
+      - build

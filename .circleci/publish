@@ -2,7 +2,9 @@
 
 set -euxo pipefail
 
-[[ "$1" =~ (prerelease|patch|minor|major) ]]
+[[ "$CI_INCREMENT_VERSION" =~ (prerelease|patch|minor|major) ]]
+
+version=$CI_INCREMENT_VERSION
 
 # Set up a git email/name so we can run other git commands
 git config user.email "publish@circleci.com"
@@ -15,49 +17,54 @@ ssh-keyscan github.com >> /tmp/githubkey
 [[ -d ~/.ssh ]] || mkdir ~/.ssh
 cat /tmp/githubkey >> ~/.ssh/known_hosts
 
-# Locally and remotely delete the tag that was created to trigger this job.
-# Prefix remote deletion with `refs/tags/` to ensure we don't accidentally
-# delete a branch that happens to have the same name.
-git tag --delete publish-$1
-git push origin --delete refs/tags/publish-$1
-
-# Keep track of the commit that the trigger tag was added to
-triggered_commit=$(git rev-parse HEAD)
-
-# This increments the package.json version and adds a new git commit with tag
-# referencing it
-yarn version --new-version $1
-
-# Keep track of the commit that yarn just added
-release_commit=$(git rev-parse HEAD)
-
-# We don't know which exact branch to update based on the tag that was created,
-# so just update all branches that point to the commit that was tagged.
-readarray -t branches_to_update < <(
-  git for-each-ref refs/heads/\* --points-at=$triggered_commit --format="%(refname:short)"
-)
-
-# Pull each branch before merging the release commit into it in case a commit
-# was pushed sometime after the trigger tag was created. Those commits won't be
-# included in the new release, but it will keep the branches from diverging in
-# that case.
-for branch in ${branches_to_update[@]}; do
-  git pull origin $branch
-  git checkout $branch
-  git merge $release_commit
-done
-
-# Make sure we're back at the release commit after updating the branches
-git checkout $release_commit
-
-# Push newly created release tag and updated branches upstream. `--atomic`
-# means that all refs must update successfully, or none will be updated and the
-# script will exit.
-git push origin --atomic --tags ${branches_to_update[@]}
-
-# Publish the new version. If this fails, it will leave the release tag (and
-# commit) in git, but there will be no associated release in the npm registry.
-# In that case, a developer can manually check out the release tag and run `npm
-# publish` to publish the release to the registry.
-yarn publish --non-interactive
+# # Create a new tmp branch to build our release commit on
+# publish_branch_name=tmp-publish-branch
+# git checkout -b $publish_branch_name
+# 
+# # Locally and remotely delete the tag that was created to trigger this job.
+# # Prefix remote deletion with `refs/tags/` to ensure we don't accidentally
+# # delete a branch that happens to have the same name.
+# git tag --delete publish-$version
+# git push origin --delete refs/tags/publish-$version
+# 
+# # Keep track of the commit that the trigger tag was added to
+# triggered_commit=$(git rev-parse HEAD)
+# 
+# # This increments the package.json version and adds a new git commit with tag
+# # referencing it
+# yarn version --new-version $version
+# 
+# # Keep track of the commit that yarn just added
+# release_commit=$(git rev-parse HEAD)
+# 
+# # We don't know which exact branch to update based on the tag that was created,
+# # so just update all branches that point to the commit that was tagged.
+# readarray -t branches_to_update < <(
+#   git for-each-ref refs/heads/\* --points-at=$triggered_commit --format="%(refname:short)"
+# )
+# 
+# # Pull each branch before merging the release commit into it in case a commit
+# # was pushed sometime after the trigger tag was created. Those commits won't be
+# # included in the new release, but it will keep the branches from diverging in
+# # that case.
+# git fetch origin
+# 
+# for branch in ${branches_to_update[@]}; do
+#   git checkout $branch
+#   git merge --ff-only $release_commit
+# done
+# 
+# # Make sure we're back at the release commit after updating the branches
+# git checkout $release_commit
+# 
+# # Push newly created release tag and updated branches upstream. `--atomic`
+# # means that all refs must update successfully, or none will be updated and the
+# # script will exit.
+# git push origin --atomic --tags ${branches_to_update[@]}
+# 
+# # Publish the new version. If this fails, it will leave the release tag (and
+# # commit) in git, but there will be no associated release in the npm registry.
+# # In that case, a developer can manually check out the release tag and run `npm
+# # publish` to publish the release to the registry.
+# yarn publish --non-interactive
 
