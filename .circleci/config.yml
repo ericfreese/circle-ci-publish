@@ -5,8 +5,6 @@ jobs:
       - image: circleci/node:10.16
     steps:
       - checkout
-      # https://circleci.com/blog/publishing-npm-packages-using-circleci-2-0/
-      - run: echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > .npmrc
       - restore_cache:
           key: v1-deps-{{ checksum "package.json" }}
       - run: yarn install
@@ -15,16 +13,40 @@ jobs:
           paths:
             - ./node_modules
       - run: yarn build
-      - run:
-          name: Halt if we don't need to publish
-          command: |
-              [ -n "$CI_INCREMENT_VERSION" ] || circleci-agent step halt
+      - persist_to_workspace:
+          root: ~/project
+          paths:
+            - "*"
+  publish:
+    docker:
+      - image: circleci/node:10.16
+    steps:
+      - attach_workspace:
+          at: ~/project
+      - run: echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > .npmrc
+      # - run: yarn publish --non-interactive
+  increment-version:
+    docker:
+      - image: circleci/node:10.16
+    steps:
+      - checkout
       - add_ssh_keys:
           fingerprints:
             - "76:57:0d:eb:5f:e0:e4:a4:3d:39:e0:6a:7b:4f:8c:76"
-      - run: .circleci/publish
+      - run: .circleci/increment-version
 workflows:
   version: 2
-  build-and-publish:
+  build-workflow:
     jobs:
-      - build
+      - build:
+          filters:
+            tags:
+              only: /.*/
+      - publish:
+          requires:
+            - build
+          filters:
+            tags:
+              only: /^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9]+)?/
+            branches:
+              ignore: /.*/

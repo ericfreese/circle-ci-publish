@@ -1,0 +1,52 @@
+#!/bin/bash
+#
+# This script is intended to be run in a Circle CI environment.
+#
+# The Circle CI project will need to be configured with an SSH key that can be
+# used to push commits to GitHub [1].
+#
+# It will create a new commit (the "release commit") that increments the
+# package.json version according to the value of the `$INCREMENT_VERSION`
+# environment variable, either "prerelease", "patch", "minor", or "major". It
+# will also create a git tag at the new commit (the "release tag").
+#
+# The script assumes that the currently checked out branch is the branch that
+# the release commit should be merged back into (the "release branch"). The
+# script will abort if merging the release commit back into the release branch
+# cannot be done as a fast-forward.
+#
+# As a last step, the script will atomically push the release branch (with the
+# new release commit added to it) and the release tag back to GitHub. If either
+# is rejected by GitHub for any reason, no changes will be made upstream and
+# the script will fail.
+#
+# 1: https://support.circleci.com/hc/en-us/articles/360018860473-How-to-push-a-commit-back-to-the-same-repository-as-part-of-the-CircleCI-job
+#
+
+set -euxo pipefail
+
+# Require the `$INCREMENT_VERSION` env var to be set to a valid value
+[[ "$INCREMENT_VERSION" =~ (prerelease|patch|minor|major) ]]
+
+# Set up a git email/name so we can run other git commands
+git config user.email "publish@circleci.com"
+git config user.name "Circle CI"
+
+# Validate github's fingerprint before using ssh to push to the repo
+# https://serverfault.com/a/701637/132285
+ssh-keyscan github.com >> /tmp/githubkey
+[[ "$(ssh-keygen -lf /tmp/githubkey)" == "2048 SHA256:nThbg6kXUpJWGl7E1IGOCspRomTxdCARLviKw6E5SY8 github.com (RSA)" ]]
+[[ -d ~/.ssh ]] || mkdir ~/.ssh
+cat /tmp/githubkey >> ~/.ssh/known_hosts
+
+# Get the current branch name
+release_branch="$(git rev-parse --abbrev-ref HEAD)"
+
+# Circle CI doesn't necessarily set upstream branch on our branch
+git branch --set-upstream-to "origin/$release_branch"
+
+# This adds a new commit and tag incrementing the package.json version
+yarn version --new-version $INCREMENT_VERSION
+
+# Push the release tag and release branch back to GitHub
+git push origin --atomic --tags $release_branch

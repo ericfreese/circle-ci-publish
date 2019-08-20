@@ -15,7 +15,8 @@ revision="$(git rev-parse $branch)"
 data='{
   "revision": "'"$revision"'",
   "build_parameters": {
-    "CI_INCREMENT_VERSION": "'"$version"'"
+    "CIRCLE_JOB": "increment-version",
+    "INCREMENT_VERSION": "'"$version"'"
   }
 }'
 
