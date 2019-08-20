@@ -2,8 +2,8 @@
 #
 # This script is intended to be run in a Circle CI environment.
 #
-# The Circle CI project will need to be configured with an SSH key that can be
-# used to push commits to GitHub [1].
+# The Circle CI project needs to be configured with an SSH key that can be used
+# to push commits to GitHub [1].
 #
 # It will create a new commit (the "release commit") that increments the
 # package.json version according to the value of the `$INCREMENT_VERSION`

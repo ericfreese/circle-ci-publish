@@ -1,0 +1,48 @@
+#!/bin/bash
+#
+# This script is intended to be run from a developer's machine.
+#
+# It needs a Circle CI user token to be available in an environment variable
+# called `CIRCLE_TOKEN`.
+#
+
+set -euo pipefail
+
+# Check that we're receiving the right arguments and that we have an API token
+if [[ $# == 0 || ! $1 =~ (prerelease|patch|minor|major) || ! -v CIRCLE_TOKEN ]]; then
+  echo "usage: CIRCLE_TOKEN=<token> $0 {prerelease|patch|minor|major} [<branch-name>=HEAD]" 1>&2
+  echo "  - Create an API token here: https://circleci.com/account/api" 1>&2
+  echo "  - Branch defaults to currently checked out branch if not provided" 1>&2
+  exit 1
+fi
+
+# Pull args to named variables
+version="$1"
+branch="${2:-$(git rev-parse --abbrev-ref HEAD)}"
+
+# Get the sha that the user is expecting to release. This prevents CI from
+# silently releasing other commits that may be on origin.
+revision="$(git rev-parse $branch)"
+
+# Build up the POST body to send to the Circle CI API. Tell it what commit sha
+# to use, what job to run, and how we want to bump the version.
+data='{
+  "revision": "'"$revision"'",
+  "build_parameters": {
+    "CIRCLE_JOB": "increment-version",
+    "INCREMENT_VERSION": "'"$version"'"
+  }
+}'
+
+# URL params for the API call
+api_version="v1.1"
+vcs_type="github"
+username="ericfreese"
+project="circle-ci-publish"
+
+# Make the HTTP request to trigger the job
+curl \
+  -X POST \
+  --header "Content-Type: application/json" \
+  -d "$data" \
+  "https://circleci.com/api/$api_version/project/$vcs_type/$username/$project/tree/$branch?circle-token=$CIRCLE_TOKEN"
