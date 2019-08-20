@@ -24,7 +24,7 @@ jobs:
       - attach_workspace:
           at: ~/project
       - run: echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > .npmrc
-      # - run: yarn publish --non-interactive
+      - run: yarn publish --non-interactive
   increment-version:
     docker:
       - image: circleci/node:10.16
