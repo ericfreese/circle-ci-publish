@@ -16,11 +16,11 @@ cat /tmp/githubkey >> ~/.ssh/known_hosts
 # Determine the trigger tag name
 trigger_tag="$(git describe --tags --match 'publish-*' HEAD)"
 
-# Extract version to use from the trigger tag
-version="${trigger_tag#publish-}"
+# Derive how to increment version from the trigger tag
+increment="${trigger_tag#publish-}"
 
-# Make sure we've got a valid tag
-[[ "$version" =~ ^(prerelease|patch|minor|major)$ ]]
+# Make sure we've got valid instructions
+[[ "$increment" =~ ^(prerelease|patch|minor|major)$ ]]
 
 # We don't know which exact branch to update based on the tag that was created,
 # so just update all branches that point to the commit that was tagged. This
@@ -31,13 +31,14 @@ readarray -t remote_branches_to_update < <(
 
 # This increments the package.json version and adds a new git commit with tag
 # referencing it
-yarn version --new-version $version
+yarn version --new-version $increment
 
-# Push git changes upstream. This atomically deletes the trigger tag, adds the
-# release tag, and updates all branches that had previously pointed at the
-# trigger tag. All refs must update successfully, or none will be updated and
-# the script will exit before actually publishing to npm.
-git push origin --atomic --tags :refs/tags/$trigger_tag ${remote_branches_to_update[@]/#/HEAD:}
+# Push git changes upstream. This always deletes the trigger tag, and then
+# atomically adds the release tag and updates all branches that had previously
+# pointed at the trigger tag. All refs must update successfully, or none will
+# be updated and the script will exit before actually publishing to npm.
+git push origin --delete refs/tags/$trigger_tag
+git push origin --atomic --tags ${remote_branches_to_update[@]/#/HEAD:}
 
 # Publish the new version. If this fails, it will leave the release tag (and
 # commit) in git, but there will be no associated release in the npm registry.
