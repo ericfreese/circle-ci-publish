@@ -1,31 +1,109 @@
 #!/bin/bash
-#
-# This script is intended to be run from a developer's machine.
-#
-# It needs a Circle CI user token to be available in an environment variable
-# called `CIRCLE_TOKEN`.
-#
 
 set -euo pipefail
 
-# Check that we're receiving the right arguments and that we have an API token
-if [[ $# == 0 || ! $1 =~ (prerelease|patch|minor|major) || ! -v CIRCLE_TOKEN ]]; then
-  echo "usage: CIRCLE_TOKEN=<token> $0 {prerelease|patch|minor|major} [<branch-name>=HEAD]" 1>&2
-  echo "  - Create an API token here: https://circleci.com/account/api" 1>&2
-  echo "  - Branch defaults to currently checked out branch if not provided" 1>&2
+usage_and_exit() {
+  cat <<USAGE 1>&2
+Publish a new version to npm
+
+  usage: CIRCLE_TOKEN=<token> $0 version [--branch <branch-name>] [--force]
+
+Environment Variables:
+
+  CIRCLE_TOKEN
+      Should specify an API token to use for the HTTP requests to Circle CI.
+      Create a Circle CI API token here: https://circleci.com/account/api
+
+Options:
+
+  <version> (required)
+      Specifies how the version should be incremented before publishing. Can be
+      one of: prerelease, patch, minor, or major
+
+  --branch <branch-name>
+      The name of the branch to create the release on. If not provided, the
+      currently checked out branch will be used.A release commit that
+      increments the package.json version will be added to this branch by
+      Circle CI. If your version of the branch is not up-to-date with GitHub's
+      version, the publish will fail.
+
+  --force
+      Don't ask for confirmation before publishing.
+USAGE
+
   exit 1
+}
+
+# Process options
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --branch)
+      branch="$2";
+      shift 2
+      ;;
+
+    --force)
+      force=1;
+      shift
+      ;;
+
+    *)
+      [[ -v version ]] && usage_and_exit
+      version=$1
+      shift
+      ;;
+  esac
+done
+
+# Check that we have everything we need
+if [[ ! -v CIRCLE_TOKEN || ! -v version || ! "$version" =~ (prerelease|patch|minor|major) ]]; then
+  usage_and_exit
 fi
 
-# Pull args to named variables
-version="$1"
-branch="${2:-$(git rev-parse --abbrev-ref HEAD)}"
+# Release branch defaults to currently checked out branch
+branch="${branch:-$(git rev-parse --abbrev-ref HEAD)}"
+
+# Get the last non-prerelease release tag
+last_release="$(
+  git describe \
+    --match "v[0-9]*" \
+    --exclude "*-[0-9]" \
+    --exclude "*-[0-9][0-9]" \
+    --exclude "*-[0-9][0-9][0-9]" \
+    --abbrev=0 \
+    $branch
+)"
+
+# Confirm the version bump that the user selected
+if [[ ! -v force ]]; then
+
+  cat <<REVIEW 1>&2
+The most recent release on \`$branch\` was \`$last_release\`.
+
+The following new commits have been added since that release and will be
+included in this release:
+
+$(git log --oneline $last_release..$branch)
+
+REVIEW
+
+  while true; do
+    printf "Are you sure you want to publish a new version? [$version] (yes/no) " 1>&2
+    read answer
+    case $answer in
+      [Yy]*) break;;
+      [Nn]*) exit 1;;
+      *) echo "Answer 'yes' or 'no'" 1>&2
+    esac
+  done
+fi
 
 # Get the sha that the user is expecting to release. This prevents CI from
 # silently releasing other commits that may be on origin.
 revision="$(git rev-parse $branch)"
 
 # Build up the POST body to send to the Circle CI API. Tell it what commit sha
-# to use, what job to run, and how we want to bump the version.
+# to use, what job to run, and how we want it to bump the version.
 data='{
   "revision": "'"$revision"'",
   "build_parameters": {
