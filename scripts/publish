@@ -6,7 +6,7 @@ usage_and_exit() {
   cat <<USAGE 1>&2
 Publish a new version to npm
 
-  usage: CIRCLE_TOKEN=<token> $0 version [--branch <branch-name>] [--force]
+  usage: CIRCLE_TOKEN=<token> $0 <version> [--branch <branch-name>] [--force]
 
 Environment Variables:
 
@@ -68,7 +68,7 @@ done
 # Release branch defaults to currently checked out branch
 branch="${branch:-$(git rev-parse --abbrev-ref HEAD)}"
 
-# Confirm the version bump that the user selected
+# Confirm the version bump that the user specified
 if [[ ! -v force ]]; then
   # Get the last non-prerelease release tag
   last_release="$(
