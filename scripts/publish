@@ -28,7 +28,8 @@ Options:
       version, the publish will fail.
 
   --force
-      Don't ask for confirmation before publishing.
+      Don't ask for confirmation before publishing. Must be provided if stdin
+      is not connected to a terminal.
 USAGE
 
   exit 1
@@ -55,30 +56,34 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# Skip confirmation if stdin is not a terminal
-[[ -t 0 ]] || force=1
+# Require `--force` flag if stdin is not a terminal
+[[ -t 0 || -v force ]] || usage_and_exit
 
-# Check that we have everything we need
-if [[ ! -v CIRCLE_TOKEN || ! -v version || ! "$version" =~ (prerelease|patch|minor|major) ]]; then
-  usage_and_exit
-fi
+# Check that we have a Circle CI API token
+[[ -v CIRCLE_TOKEN ]] || usage_and_exit
+
+# Check that we have a valid version
+[[ -v version && "$version" =~ (prerelease|patch|minor|major) ]] || usage_and_exit
 
 # Release branch defaults to currently checked out branch
 branch="${branch:-$(git rev-parse --abbrev-ref HEAD)}"
 
-# Get the last non-prerelease release tag
-last_release="$(
-  git describe \
-    --match "v[0-9]*" \
-    --exclude "*-[0-9]" \
-    --exclude "*-[0-9][0-9]" \
-    --exclude "*-[0-9][0-9][0-9]" \
-    --abbrev=0 \
-    $branch
-)"
-
 # Confirm the version bump that the user selected
 if [[ ! -v force ]]; then
+  # Get the last non-prerelease release tag
+  last_release="$(
+    git describe \
+      --match "v[0-9]*" \
+      --exclude "*-[0-9]" \
+      --exclude "*-[0-9][0-9]" \
+      --exclude "*-[0-9][0-9][0-9]" \
+      --abbrev=0 \
+      $branch
+  )"
+
+  # Get the commits between the last release and this branch
+  new_commits="$(git log --oneline $last_release..$branch)"
+  new_commits=${new_commits:-"<none>"}
 
   cat <<REVIEW 1>&2
 The most recent release on \`$branch\` was \`$last_release\`.
@@ -86,7 +91,7 @@ The most recent release on \`$branch\` was \`$last_release\`.
 The following new commits have been added since that release and will be
 included in this release:
 
-$(git log --oneline $last_release..$branch)
+$new_commits
 
 REVIEW
 
