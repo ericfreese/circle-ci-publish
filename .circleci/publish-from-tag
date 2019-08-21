@@ -1,0 +1,83 @@
+#!/bin/bash
+
+set -euxo pipefail
+
+# Set up a git email/name so we can run other git commands
+git config user.email "publish@circleci.com"
+git config user.name "Circle CI"
+
+# Validate github's fingerprint before using ssh to push to the repo
+# https://serverfault.com/a/701637/132285
+ssh-keyscan github.com >> /tmp/githubkey
+[[ "$(ssh-keygen -lf /tmp/githubkey)" == "2048 SHA256:nThbg6kXUpJWGl7E1IGOCspRomTxdCARLviKw6E5SY8 github.com (RSA)" ]]
+[[ -d ~/.ssh ]] || mkdir ~/.ssh
+cat /tmp/githubkey >> ~/.ssh/known_hosts
+
+# Determine the trigger tag name
+trigger_tag="$(git describe --tags --match 'publish-*' HEAD)"
+
+# Extract version to use from the trigger tag
+version="${trigger_tag#publish-}"
+
+# Make sure we got a valid tag
+[[ "$version" =~ ^(prerelease|patch|minor|major)$ ]]
+
+# Locally and remotely delete the tag that was created to trigger this job.
+# Prefix remote deletion with `refs/tags/` to ensure we don't accidentally
+# delete a branch that happens to have the same name.
+git tag --delete $trigger_tag
+git push origin --delete refs/tags/$trigger_tag
+
+# Keep track of the commit that the trigger tag was added to
+triggered_commit=$(git rev-parse HEAD)
+
+# This increments the package.json version and adds a new git commit with tag
+# referencing it
+yarn version --new-version $version
+
+# Keep track of the commit that yarn just added
+release_commit=$(git rev-parse HEAD)
+
+# We don't know which exact branch to update based on the tag that was created,
+# so just update all branches that point to the commit that was tagged.
+readarray -t remote_branches_to_update < <(
+  git for-each-ref 'refs/remotes/origin/**' --points-at=$triggered_commit --format="%(refname:short)"
+)
+
+# We'll build up a list of local branch names to push back upstream
+declare -a local_branch_names
+
+# Pull each branch before merging the release commit into it in case a commit
+# was pushed sometime after the trigger tag was created. Those commits won't be
+# included in the new release, but it will keep the branches from diverging in
+# that case.
+for remote_branch in ${remote_branches_to_update[@]}; do
+  # Use a prefix to avoid an error if we already happen to have a local branch
+  # named for the remote one
+  local_branch="${remote_branch/origin\//tmp-}"
+
+  # Check out a new local branch tracking the remote branch
+  git checkout -b $local_branch --track $remote_branch
+
+  # Merge the release commit into the branch. Fail if any extra commits have
+  # been pushed to the branch and we can't fast-forward merge.
+  git merge --ff-only $release_commit
+
+  # Add the local branch to the list to push upstream
+  local_branch_names+=($local_branch)
+done
+
+# Push newly created release tag and updated branches upstream. `--atomic`
+# means that all refs must update successfully, or none will be updated and the
+# script will exit.
+git push origin --atomic --tags ${local_branch_names[@]}
+
+# Make sure we're back at the release commit before we publish
+git checkout $release_commit
+
+# Publish the new version. If this fails, it will leave the release tag (and
+# commit) in git, but there will be no associated release in the npm registry.
+# In that case, a developer can manually check out the release tag and run `npm
+# publish` to publish the release to the registry.
+yarn publish --non-interactive
+

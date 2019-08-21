@@ -1,10 +1,14 @@
-version: 2
-jobs:
-  build:
+version: 2.1
+executors:
+  ci-executor:
     docker:
       - image: circleci/node:10.16
+jobs:
+  build:
+    executor: ci-executor
     steps:
       - checkout
+      - run: echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > .npmrc
       - restore_cache:
           key: v1-deps-{{ checksum "package.json" }}
       - run: yarn install
@@ -17,36 +21,28 @@ jobs:
           root: ~/project
           paths:
             - "*"
-  publish:
-    docker:
-      - image: circleci/node:10.16
+  publish-from-tag:
+    executor: ci-executor
     steps:
       - attach_workspace:
           at: ~/project
-      - run: echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > .npmrc
-      - run: yarn publish --non-interactive
-  increment-version:
-    docker:
-      - image: circleci/node:10.16
-    steps:
-      - checkout
       - add_ssh_keys:
           fingerprints:
             - "76:57:0d:eb:5f:e0:e4:a4:3d:39:e0:6a:7b:4f:8c:76"
-      - run: .circleci/increment-version
+      - run: .circleci/publish-from-tag
 workflows:
   version: 2
-  build-workflow:
+  build-and-publish:
     jobs:
       - build:
           filters:
             tags:
               only: /.*/
-      - publish:
+      - publish-from-tag:
           requires:
             - build
           filters:
             tags:
-              only: /v[0-9]+\.[0-9]+\.[0-9]+(-[0-9]+)?/
+              only: /publish-(prerelease|patch|minor|major)/
             branches:
               ignore: /.*/
