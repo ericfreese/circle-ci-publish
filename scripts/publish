@@ -55,6 +55,9 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# Skip confirmation if stdin is not a terminal
+[[ -t 0 ]] || force=1
+
 # Check that we have everything we need
 if [[ ! -v CIRCLE_TOKEN || ! -v version || ! "$version" =~ (prerelease|patch|minor|major) ]]; then
   usage_and_exit
