@@ -24,9 +24,10 @@ increment="${trigger_tag#publish-}"
 
 # We don't know which exact branch to update based on the tag that was created,
 # so just update all branches that point to the commit that was tagged. This
-# builds an array of all remote branches that need to be updated.
+# builds an array of all remote branches that need to be updated. Filters out
+# symbolic refs like `refs/remotes/origin/HEAD`.
 readarray -t remote_branches_to_update < <(
-  git for-each-ref 'refs/remotes/origin/**' --points-at=$trigger_tag --format="%(refname:strip=3)"
+  git for-each-ref 'refs/remotes/origin/**' --points-at=$trigger_tag --format="%(refname:strip=3) %(symref)" | grep " $"
 )
 
 # This increments the package.json version and adds a new git commit with tag
