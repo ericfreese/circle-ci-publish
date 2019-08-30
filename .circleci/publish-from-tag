@@ -34,12 +34,18 @@ readarray -t remote_branches_to_update < <(
 # referencing it
 yarn version --new-version $increment
 
+# Get the name of the newly created version tag
+release_tag="$(git describe --tags --match 'v*' HEAD)"
+
+# Ensure we got the correct tag
+[[ "$release_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9]+)?$ ]]
+
 # Push git changes upstream. This always deletes the trigger tag, and then
 # atomically adds the release tag and updates all branches that had previously
 # pointed at the trigger tag. All refs must update successfully, or none will
 # be updated and the script will exit before actually publishing to npm.
 git push origin --delete refs/tags/$trigger_tag
-git push origin --atomic --tags ${remote_branches_to_update[@]/#/HEAD:}
+git push origin --atomic $release_tag ${remote_branches_to_update[@]/#/HEAD:}
 
 # Publish the new version. If this fails, it will leave the release tag (and
 # commit) in git, but there will be no associated release in the npm registry.
